@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret storageclass bootstrap argocd argocd-password argocd-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -57,6 +57,17 @@ argocd:
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
 	helm install argocd argo/argo-cd -n argocd --create-namespace
+	kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=120s
+	kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s
+
+ollama-secret-dev:
+	kubectl create namespace inference-dev --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic ollama-secret -n inference-dev --from-literal=dummy-api-key=sk-test-12345 --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f k8s/ollama-pvc-dev.yaml
+
+argocd-apps: ollama-secret-dev
+	kubectl apply -f k8s/argocd-ollama-app.yaml
+	kubectl apply -f k8s/argocd-ollama-dev-app.yaml
 
 argocd-password:
 	kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
@@ -68,7 +79,7 @@ argocd-ui:
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
-bootstrap: kubeconfig alb-controller storageclass ollama-secret
+bootstrap: kubeconfig alb-controller storageclass ollama-secret argocd argocd-apps
 
 gpu-up:
 	cd terraform && terraform apply -var gpu_desired_size=1
