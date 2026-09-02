@@ -1,0 +1,25 @@
+replicaCount: 1
+
+image:
+  repository: ollama/ollama
+  tag: latest
+
+ollamaModel: qwen2.5:0.5b
+ollamaKeepAlive: "24h"
+
+# Pre-existing objects this chart references but doesn't manage itself
+# (ConfigMap/Secret/PVC created separately — see local/manifests/ollama.yaml
+# and `make ollama-secret`). Keeps this first chart focused on the Deployment.
+pvcName: ollama
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+service:
+  type: ClusterIP
+  port: 11434

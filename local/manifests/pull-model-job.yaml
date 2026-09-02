@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pull-tinyllama
+  namespace: inference
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: pull-model
+          image: ollama/ollama:latest
+          command: ["ollama"]
+          args: ["pull", "tinyllama"]
+          env:
+            - name: OLLAMA_HOST
+              value: "ollama:11434"

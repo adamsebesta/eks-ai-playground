@@ -1,0 +1,80 @@
+# Same vLLM workload as k8s/vllm/deployment.yaml, but requesting its GPU
+# through DRA instead of the nvidia.com/gpu integer resource.
+#
+# Diff the two files — that comparison is the point of this exercise.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-dra
+  namespace: inference
+  labels:
+    app: vllm-dra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-dra
+  template:
+    metadata:
+      labels:
+        app: vllm-dra
+    spec:
+      nodeSelector:
+        workload: gpu-inference
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      # ---- the DRA difference ----
+      resourceClaims:
+        - name: gpu
+          resourceClaimTemplateName: single-gpu
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - --model=Qwen/Qwen2.5-1.5B-Instruct
+            - --max-model-len=8192
+            - --gpu-memory-utilization=0.90
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+            limits:
+              memory: 12Gi
+            # NOTE: no nvidia.com/gpu here — the claim below provides the device
+            claims:
+              - name: gpu
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 40
+      volumes:
+        - name: model-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-dra
+  namespace: inference
+spec:
+  selector:
+    app: vllm-dra
+  ports:
+    - port: 8000
+      targetPort: 8000

@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ollama.fullname" . }}
+  labels:
+    {{- include "ollama.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "ollama.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ollama.labels" . | nindent 8 }}
+    spec:
+      initContainers:
+        - name: pull-model
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["sh", "-c"]
+          args:
+            - |
+              ollama serve &
+              SERVER_PID=$!
+              until ollama list >/dev/null 2>&1; do sleep 1; done
+              ollama pull {{ .Values.ollamaModel }}
+              kill $SERVER_PID
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 11434
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: OLLAMA_KEEP_ALIVE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "ollama.fullname" . }}-config
+                  key: keep-alive
+            - name: TEST_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ollama-secret
+                  key: dummy-api-key
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcName }}

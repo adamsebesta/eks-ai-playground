@@ -1,0 +1,8 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ai-playground
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+# Two workers so scheduling, draining, and node-affinity exercises are meaningful.

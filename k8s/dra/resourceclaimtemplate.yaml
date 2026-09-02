@@ -1,0 +1,23 @@
+# ResourceClaimTemplate — each pod using this gets its own claim for one GPU.
+#
+# ⚠️ VERIFY BEFORE APPLYING (see README.md in this directory):
+#   kubectl explain resourceclaimtemplate.spec.spec.devices.requests
+# The API moved v1beta1 -> v1 at GA in Kubernetes 1.34 and the request
+# structure changed. Reconcile this with your installed driver version.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: single-gpu
+  namespace: inference
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
+            allocationMode: ExactCount
+            count: 1
+# Exercise: once this works, try selecting on attributes instead of a bare
+# count — e.g. constrain by GPU memory — which is the capability the classic
+# device plugin could never express.

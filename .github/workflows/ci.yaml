@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: fmt
+        run: terraform -chdir=terraform fmt -check -recursive
+      - name: validate
+        run: |
+          terraform -chdir=terraform init -backend=false
+          terraform -chdir=terraform validate
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: kubeconform
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          ./kubeconform -summary -strict k8s/ local/manifests/
+
+  # Week 10 exercise: add Trivy config + image scanning here

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: inference
+  labels:
+    app: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      nodeSelector:
+        workload: gpu-inference
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest # Week 7 exercise: pin a version + digest
+          args:
+            - --model=Qwen/Qwen2.5-1.5B-Instruct
+            - --max-model-len=8192
+            - --gpu-memory-utilization=0.90
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: "1"
+            limits:
+              memory: 12Gi
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60 # model download + load
+            periodSeconds: 15
+            failureThreshold: 40
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 600
+            periodSeconds: 30
+      volumes:
+        - name: model-cache
+          emptyDir: {} # Week 8 exercise: EBS/EFS PVC so weights survive pod restarts
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
