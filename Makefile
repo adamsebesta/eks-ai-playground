@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret storageclass bootstrap gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret storageclass bootstrap argocd argocd-password argocd-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -52,6 +52,19 @@ ollama-secret:
 
 storageclass:
 	kubectl apply -f k8s/storageclass-gp3.yaml
+
+argocd:
+	helm repo add argo https://argoproj.github.io/argo-helm
+	helm repo update
+	helm install argocd argo/argo-cd -n argocd --create-namespace
+
+argocd-password:
+	kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+	@echo ""
+
+argocd-ui:
+	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
+	kubectl port-forward -n argocd svc/argocd-server 8080:443
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
