@@ -12,4 +12,7 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: inference
-  syncPolicy: {}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
