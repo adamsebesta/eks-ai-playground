@@ -49,6 +49,7 @@ alb-controller:
 ollama-secret:
 	kubectl create namespace inference --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create secret generic ollama-secret -n inference --from-literal=dummy-api-key=sk-test-12345 --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f k8s/ollama-pvc.yaml
 
 storageclass:
 	kubectl apply -f k8s/storageclass-gp3.yaml
