@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: 281981892670.dkr.ecr.eu-central-1.amazonaws.com/eks-ai-playground-faceapp
-  tag: v1
+  tag: "15bffec65383eef4626431d3f2f4f0f265f27363"
 
 service:
   port: 8000
