@@ -185,7 +185,12 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:adamsebesta/eks-ai-playground:ref:refs/heads/main"]
+      # GitHub's "immutable subject claims" default embeds numeric owner/repo
+      # IDs, not just names — confirmed by decoding the actual token, not
+      # guessed. More secure than the name-only format: this repo's real
+      # identity can never be spoofed by renaming/recreating a repo with the
+      # same name.
+      values = ["repo:adamsebesta@61263842/eks-ai-playground@1354764108:ref:refs/heads/main"]
     }
   }
 }

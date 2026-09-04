@@ -17,15 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TEMPORARY — decodes the actual OIDC token's claims so we can see
-      # exactly what `sub`/`aud` GitHub is sending vs. what the IAM trust
-      # policy expects. Remove once the mismatch is found.
-      - name: Debug OIDC token claims
-        run: |
-          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq .
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
