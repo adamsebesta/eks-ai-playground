@@ -27,6 +27,10 @@ jobs:
       - name: kubeconform
         run: |
           curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
-          ./kubeconform -summary -strict k8s/ local/manifests/
+          # -ignore-missing-schemas: kubeconform's bundled schemas only cover
+          # built-in K8s kinds — it has no way to know about custom CRDs like
+          # Argo CD's Application without being pointed at an external schema
+          # catalog. Skipping rather than failing on kinds it can't validate.
+          ./kubeconform -summary -strict -ignore-missing-schemas k8s/ local/manifests/
 
   # Week 10 exercise: add Trivy config + image scanning here

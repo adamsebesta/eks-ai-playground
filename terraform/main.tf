@@ -152,8 +152,8 @@ resource "aws_ecr_repository" "faceapp" {
 # module fetches GitHub's actual live TLS cert at apply time and computes
 # the fingerprint from it, so it never goes stale across cert rotations.
 module "github_oidc_provider" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-oidc-provider"
-  version = "~> 6.8"
+  source  = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-provider"
+  version = "~> 5.48"
 
   url = "https://token.actions.githubusercontent.com"
 
