@@ -17,3 +17,11 @@ output "vpc_id" {
 output "lb_controller_role_arn" {
   value = module.lb_controller_irsa_role.iam_role_arn
 }
+
+output "faceapp_ecr_repository_url" {
+  value = aws_ecr_repository.faceapp.repository_url
+}
+
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions.arn
+}

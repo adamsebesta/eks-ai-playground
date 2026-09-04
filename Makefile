@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -54,10 +54,14 @@ ollama-secret:
 storageclass:
 	kubectl apply -f k8s/storageclass-gp3.yaml
 
+# Fixed admin password so it survives cluster rebuilds: eks-playground-2026
+# (bcrypt hash below — not reversible; login isn't reachable without cluster
+# access already, so committing the hash to this public repo is low-risk)
 argocd:
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
-	helm install argocd argo/argo-cd -n argocd --create-namespace
+	helm install argocd argo/argo-cd -n argocd --create-namespace \
+		--set configs.secret.argocdServerAdminPassword='$$2a$$10$$QgWPMpv7VdrAv..Ffl6as.m3ozp4XR3Gi2muMqbwTljVGXBc67ZU2'
 	kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=120s
 	kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s
 
@@ -77,6 +81,20 @@ argocd-password:
 argocd-ui:
 	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
 	kubectl port-forward -n argocd svc/argocd-server 8080:443
+
+monitoring:
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+	helm repo update
+	helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+		-n monitoring --create-namespace
+
+grafana-password:
+	kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+	@echo ""
+
+grafana-ui:
+	@echo "Login at http://localhost:3001 — user: admin, password: run 'make grafana-password'"
+	kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3001:80
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.

@@ -128,3 +128,100 @@ module "lb_controller_irsa_role" {
     Owner   = "adam"
   }
 }
+
+# IMMUTABLE tags: once pushed, a tag can never be overwritten — forces every
+# release to use a distinct tag (e.g. the commit SHA), which is what actually
+# makes "the image tag IS the deploy trigger" (from the Argo CD work) a safe
+# guarantee rather than a convention someone can accidentally violate.
+resource "aws_ecr_repository" "faceapp" {
+  name                 = "${var.cluster_name}-faceapp"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+# GitHub Actions OIDC — lets CI assume an AWS role without any long-lived
+# access keys stored as GitHub secrets. The thumbprint isn't hardcoded: the
+# module fetches GitHub's actual live TLS cert at apply time and computes
+# the fingerprint from it, so it never goes stale across cert rotations.
+module "github_oidc_provider" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-oidc-provider"
+  version = "~> 6.8"
+
+  url = "https://token.actions.githubusercontent.com"
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.github_oidc_provider.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Scoped to main branch only — no PR/other-branch workflow can assume
+    # this role, matching the same least-privilege reasoning as every other
+    # IRSA role in this file (blast radius, not blanket trust).
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:adamsebesta/eks-ai-playground:ref:refs/heads/main"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${var.cluster_name}-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_ecr_push" {
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"] # this specific action doesn't support resource-level scoping
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:PutImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+    ]
+    resources = [aws_ecr_repository.faceapp.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_ecr_push" {
+  name   = "ecr-push"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.github_actions_ecr_push.json
+}

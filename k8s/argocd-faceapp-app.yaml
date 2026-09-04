@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: faceapp
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adamsebesta/eks-ai-playground.git
+    targetRevision: main
+    path: charts/faceapp
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: faceapp
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true

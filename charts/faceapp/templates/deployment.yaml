@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "faceapp.fullname" . }}
+  labels:
+    {{- include "faceapp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "faceapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "faceapp.labels" . | nindent 8 }}
+    spec:
+      # Only nodes in the gpu node group carry this label — pins scheduling
+      # there deliberately, same pairing as the taint/toleration below.
+      nodeSelector:
+        workload: gpu-inference
+      # Matches the taint Terraform applies to every node in the gpu pool
+      # (nvidia.com/gpu:NoSchedule) — without this, the scheduler skips
+      # every GPU node for this pod entirely, same as any other workload.
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8000
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "faceapp.fullname" . }}

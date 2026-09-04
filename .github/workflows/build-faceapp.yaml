@@ -1,0 +1,50 @@
+name: Build and push faceapp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/faceapp/**'
+
+permissions:
+  id-token: write   # required for OIDC — no AWS keys stored as secrets
+  contents: write   # needed to commit the new image tag back to the chart
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::281981892670:role/eks-ai-playground-github-actions
+          aws-region: eu-central-1
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: eks-ai-playground-faceapp
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 -t "$REGISTRY/$REPOSITORY:$IMAGE_TAG" app/faceapp/
+          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+
+      # This is the actual deploy trigger — Argo CD's ollama/faceapp Applications
+      # are watching this repo, not ECR, so the tag has to land in Git for
+      # anything to happen.
+      - name: Bump image tag in the chart and commit
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          sed -i "s/tag: .*/tag: \"$IMAGE_TAG\"/" charts/faceapp/values.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add charts/faceapp/values.yaml
+          git commit -m "Deploy faceapp $IMAGE_TAG" || echo "no changes to commit"
+          git push

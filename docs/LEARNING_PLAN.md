@@ -84,13 +84,16 @@
 
 ## Phase 4 — GPU inference platform (Weeks 7–9) ← the artifact
 
-Read [GPU_SCHEDULING.md](GPU_SCHEDULING.md) first — you're going to build **both** GPU scheduling models and compare them. That comparison is what makes this artifact stand out.
+**Pivoted (Week 2) from a generic vLLM chat demo to a real application: a facial-recognition daycare check-in/notification pipeline** — stock footage only, never real children's data (COPPA/BIPA-aware by design; existing CITI children's-PII certification is a genuine, relevant asset to highlight here). Still hits every original learning objective (both GPU scheduling models, Karpenter, benchmarks) — just against a workload with a real story instead of an off-the-shelf model demo. Read [GPU_SCHEDULING.md](GPU_SCHEDULING.md) first regardless — the device-plugin/DRA comparison is still the artifact's centerpiece.
+
+**Architecture**: an InsightFace-based detection+recognition API (GPU-backed, same Deployment/Service/PVC shape as Ollama), a frame-source component simulating a camera feed from stock footage, and a notification-simulation layer (log/webhook) standing in for a real parent-alert system. Packaged identically to everything built so far — Helm chart, Argo CD Application, GPU taints/tolerations, DCGM-based observability.
 
 **Week 7 — classic path (device plugin)**
-- Scale up the GPU node group (`make gpu-up`): g5.xlarge spot (~$0.30–0.45/hr — always `make gpu-down` after sessions).
+- Scale up the GPU node group (`make gpu-up`): g5.xlarge spot (~$0.30–0.45/hr — always `make gpu-down` after sessions). Note: InsightFace needs nowhere near 24GB VRAM — running on GPU is for the scheduling-model exercise, not because the workload demands it.
 - NVIDIA device plugin DaemonSet, GPU taints/tolerations, `nvidia.com/gpu` resource scheduling.
-- Deploy vLLM serving Qwen2.5-1.5B-Instruct (`k8s/vllm/`) — OpenAI-compatible API on your own cluster.
-- Benchmark it: tokens/sec, time-to-first-token, concurrency behavior. Record numbers in the README.
+- Containerize the InsightFace service, deploy it (replaces the vLLM/Qwen2.5-1.5B step — `k8s/vllm/` stays in the repo as reference/comparison material, not the active path).
+- Benchmark it: inference latency per frame, throughput, concurrency behavior. Record numbers in the README.
+- **GPU observability (added Week 2, before any GPU workload runs — bake in from the start, don't bolt on later):** `kube-prometheus-stack` (already installed, Phase 2) has zero GPU-specific metrics by default — `node-exporter` sees CPU/memory/disk, nothing about VRAM/GPU utilization/temperature. Install **NVIDIA's DCGM Exporter** (another DaemonSet, same pattern as the device plugin) alongside it — exposes real GPU metrics (utilization %, memory used/total, temperature, power draw) as a scrapeable endpoint the existing Prometheus Operator picks up via a `ServiceMonitor`, same label-selector discovery mechanism as everything else it scrapes. Add the community GPU dashboard to the same Grafana instance rather than standing up a second observability stack. This is also the natural moment to watch a real OOM-equivalent for GPUs — VRAM exhaustion — since vLLM will be memory-constrained on a single `g5.xlarge`'s 24GB.
 
 **Week 8 — autoscaling (device plugin only)**
 - HPA on custom metrics, then extend the Karpenter setup from Phase 2d to manage GPU capacity specifically — a `NodePool`/`EC2NodeClass` for `g5.xlarge` spot, `nvidia.com/gpu` requirements, and spot interruption handling. You already know Karpenter's mechanics from Phase 2d; this week is the GPU-specific application, not a first exposure.
