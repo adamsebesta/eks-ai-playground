@@ -1,5 +1,11 @@
 replicaCount: 1
 
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3 # GPU capacity is expensive — keep this small deliberately
+  targetCPUUtilizationPercentage: 60
+
 image:
   repository: 281981892670.dkr.ecr.eu-central-1.amazonaws.com/eks-ai-playground-faceapp
   tag: "15bffec65383eef4626431d3f2f4f0f265f27363"
@@ -15,6 +21,3 @@ resources:
     cpu: "2"
     memory: 4Gi
     nvidia.com/gpu: "1"
-
-pvc:
-  size: 2Gi

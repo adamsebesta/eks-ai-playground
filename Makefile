@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui karpenter gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -81,6 +81,24 @@ argocd-password:
 argocd-ui:
 	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
 	kubectl port-forward -n argocd svc/argocd-server 8080:443
+
+# 2 replicas + leader election: Karpenter is cluster-critical infra, same HA
+# expectation as any other production controller. Namespace/service account
+# must match the Pod Identity Association Terraform created (karpenter/karpenter).
+karpenter:
+	helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+		--version "1.14.1" \
+		-n karpenter --create-namespace \
+		--set settings.clusterName=$(CLUSTER_NAME) \
+		--set settings.interruptionQueue=$$(cd terraform && terraform output -raw karpenter_queue_name) \
+		--set serviceAccount.name=karpenter \
+		--set replicas=2 \
+		--set controller.resources.requests.cpu=500m \
+		--set controller.resources.requests.memory=1Gi \
+		--set controller.resources.limits.cpu=1 \
+		--set controller.resources.limits.memory=1Gi
+	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
+	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
 
 monitoring:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts

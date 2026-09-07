@@ -15,7 +15,12 @@ module "vpc" {
 
   # Required for the AWS Load Balancer Controller (Week 4)
   public_subnet_tags  = { "kubernetes.io/role/elb" = 1 }
-  private_subnet_tags = { "kubernetes.io/role/internal-elb" = 1 }
+  # karpenter.sh/discovery: tag-based lookup, not hardcoded subnet IDs — the
+  # standard production pattern. EC2NodeClass finds these declaratively.
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = 1
+    "karpenter.sh/discovery"          = var.cluster_name
+  }
 }
 
 data "aws_availability_zones" "available" {
@@ -36,11 +41,18 @@ module "eks" {
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
+  # Same discovery-tag pattern as the subnets above — EC2NodeClass finds
+  # this security group by tag, not a hardcoded ID.
+  node_security_group_tags = {
+    "karpenter.sh/discovery" = var.cluster_name
+  }
+
   cluster_addons = {
     coredns                = {}
     kube-proxy             = {}
     vpc-cni                = {}
     eks-pod-identity-agent = {}
+    metrics-server         = {} # required for HPA — exposes the metrics.k8s.io API
     aws-ebs-csi-driver = {
       service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
     }
@@ -229,4 +241,31 @@ resource "aws_iam_role_policy" "github_actions_ecr_push" {
   name   = "ecr-push"
   role   = aws_iam_role.github_actions.id
   policy = data.aws_iam_policy_document.github_actions_ecr_push.json
+}
+
+# Karpenter: replaces the static `gpu` node group's fixed desired_size (which
+# Terraform can never actually control — the module hardcodes
+# ignore_changes on that field so it doesn't fight an autoscaler). Karpenter
+# watches for unschedulable pods and provisions exactly-fitting nodes,
+# instead of a pre-declared fixed size.
+module "karpenter" {
+  source  = "terraform-aws-modules/eks/aws//modules/karpenter"
+  version = "~> 20.31"
+
+  cluster_name = module.eks.cluster_name
+
+  # Pod Identity, not IRSA — closes the loop on the eks-pod-identity-agent
+  # addon that's been installed since Day 1 but never actually used yet.
+  enable_pod_identity              = true
+  create_pod_identity_association  = true
+
+  enable_spot_termination = true # real spot interruption handling, Week 8's story
+
+  namespace       = "karpenter"
+  service_account = "karpenter"
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
 }

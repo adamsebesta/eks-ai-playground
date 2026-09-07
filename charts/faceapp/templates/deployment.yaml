@@ -5,9 +5,9 @@ metadata:
   labels:
     {{- include "faceapp.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  strategy:
-    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "faceapp.selectorLabels" . | nindent 6 }}
@@ -44,6 +44,8 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
       volumes:
+        # emptyDir, deliberately — a shared RWO PVC across HPA-scaled replicas
+        # deadlocks exactly like ollama's did on day 2. Enrolled faces are
+        # per-pod/ephemeral for now; a real fix needs EFS (RWX), deferred.
         - name: data
-          persistentVolumeClaim:
-            claimName: {{ include "faceapp.fullname" . }}
+          emptyDir: {}
