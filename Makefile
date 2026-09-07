@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui karpenter gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui karpenter karpenter-nodeclass gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -99,6 +99,11 @@ karpenter:
 		--set controller.resources.limits.memory=1Gi
 	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
 	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
+
+karpenter-nodeclass:
+	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
+		k8s/karpenter/ec2nodeclass-gpu.yaml | kubectl apply -f -
+	kubectl apply -f k8s/karpenter/nodepool-gpu.yaml
 
 monitoring:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts

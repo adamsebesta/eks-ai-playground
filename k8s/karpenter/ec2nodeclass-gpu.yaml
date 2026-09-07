@@ -1,0 +1,24 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: gpu
+spec:
+  amiFamily: AL2023
+  # AL2023's NVIDIA-enabled variant — same AMI type the static gpu node
+  # group already used (ami_type = "AL2023_x86_64_NVIDIA" in main.tf),
+  # referenced by its SSM parameter directly rather than a hardcoded AMI ID
+  # so it always resolves to the current recommended build for this K8s version.
+  amiSelectorTerms:
+    - ssmParameter: "/aws/service/eks/optimized-ami/1.34/amazon-linux-2023/x86_64/nvidia/recommended/image_id"
+  role: __KARPENTER_NODE_ROLE_NAME__ # substituted at apply time — see `make karpenter-nodeclass`
+  # Tag-based discovery — matches the karpenter.sh/discovery tags Terraform
+  # applies to the private subnets and node security group.
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: eks-ai-playground
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: eks-ai-playground
+  tags:
+    Project: eks-ai-playground
+    Owner: adam

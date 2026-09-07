@@ -167,3 +167,36 @@ This becomes your interview prep — concrete stories beat generic claims.
 - Resolve the `replicaCount`/RWO-PVC landmine in the chart before ever trying multi-replica.
 - **`make eks-down`** — end of session.
 - AWS Load Balancer Controller + real ALB in progress next.
+
+## Pivot to a real project + Karpenter debugging saga (2026-09-04 → 2026-09-07)
+
+**Pivoted Phase 4 from a generic vLLM chat demo to a real application**: a facial-recognition daycare check-in/notification pipeline (stock footage only, never real children's data — COPPA/BIPA-aware by design, and the existing CITI children's-PII certification is a genuine relevant asset here). Built an InsightFace-based FastAPI service (`app/faceapp/`), containerized, pushed to a new `aws_ecr_repository` (IMMUTABLE tags — ties directly to "the image tag IS the deploy trigger" from the Argo CD work).
+
+**Real GitHub Actions CI built, with real debugging, not just following a tutorial:**
+- Docker build failures chased through three distinct root causes in sequence: `onnxruntime-gpu` unresolvable (turned out to be Apple Silicon building `arm64` by default against an amd64-only CUDA image — fixed with explicit `--platform=linux/amd64`), then a missing C++ toolchain for InsightFace's Cython extension (`build-essential`/`python3-dev`).
+- Local push abandoned (multi-GB image, slow home upload) in favor of GitHub Actions + **OIDC federation** — no long-lived AWS keys as secrets. Hit a real, current GitHub behavior: **"immutable subject claims"** — repos created after 2026-07-15 embed numeric owner/repo IDs in the OIDC token's `sub` claim (`repo:owner@id/repo@id:ref:...`), not just names. Found by *decoding the actual token* (added a temporary debug step) rather than trusting docs alone — the docs page had this exact caveat, just missed on a broader first read. Real lesson: empirical verification beats documentation summary when they disagree.
+- Also fixed a *pre-existing*, previously-unnoticed CI failure (`terraform validate` + `kubeconform`) that had been red since day one — provider version conflict (same v5/v6 module mismatch pattern) and kubeconform's lack of schema awareness for Argo CD's `Application` CRD (`-ignore-missing-schemas`).
+
+**Went public repo now has a working CI/CD loop end to end**: commit → GitHub Actions builds/pushes to ECR (fast, datacenter networking) → auto-commits the real image SHA into `charts/faceapp/values.yaml` → Argo CD picks it up. The actual pipeline this whole plan was building toward.
+
+**Discovered `make gpu-up` has been silently broken this entire time**: `terraform apply -var gpu_desired_size=1` reported `0 added, 0 changed, 0 destroyed` — traced to `terraform-aws-modules/eks`'s own module source hardcoding `lifecycle { ignore_changes = [scaling_config[0].desired_size] }` on every managed node group, deliberately, so Terraform never fights an external autoscaler. This isn't a bug in this repo — it's a structural property of the module that had simply never been exercised until now.
+
+**Pivoted to Karpenter as the real fix** (not a workaround — Karpenter's whole design is "don't pre-declare fixed capacity, provision on demand"), genuinely well-motivated by hitting this exact problem rather than a contrived exercise:
+- `terraform-aws-modules/eks//modules/karpenter` for controller IAM role, node IAM role + instance profile + EKS access entry, and a real spot-interruption SQS queue + EventBridge rules — used **EKS Pod Identity** (not IRSA) for the controller, finally giving the `eks-pod-identity-agent` addon (installed since Day 1, unused until now) a real consumer.
+- Hit the exact same major-version module conflict as the earlier GitHub OIDC provider (a `~> 6.x` submodule needing AWS provider `>=6.28.0` against the repo's `~>5.80`) — same fix pattern, smaller module version.
+- Added `karpenter.sh/discovery` tag-based subnet/security-group discovery (the actual production pattern, not hardcoded IDs).
+- Installed via Helm: 2 replicas + leader election (Karpenter is cluster-critical infra, same HA expectation as any production controller), explicit resource requests/limits.
+- Wrote `NodePool`/`EC2NodeClass` with real production settings: consolidation (`WhenEmptyOrUnderutilized`), disruption budgets (max 1 node at a time), `expireAfter` for periodic recycling, and a hard `limits.cpu/memory` ceiling as a safety net against runaway spend.
+
+**Added HPA to faceapp, and caught the conflict before deploying it**: same class of bug as the Terraform/Karpenter `desired_size` fight — a hardcoded `replicas:` in the Deployment template would have fought HPA's own scaling decisions on every sync. Fixed by making `replicas` conditional on `autoscaling.enabled` (recovering the exact pattern from the original `helm create` scaffold, stripped out on Day 1 as "unused boilerplate" — it wasn't). Also caught, before deploying: the shared RWO PVC for `/data` (enrolled faces) would deadlock the instant HPA scaled past 1 replica — same failure mode as `ollama`'s day-2 PVC bug. Fixed pragmatically with `emptyDir` (enrolled faces now ephemeral per-pod) rather than building EFS/RWX mid-session; flagged as the real follow-up.
+
+**Karpenter debugging chain — methodical elimination, self-directed** (explicitly wanted to debug this personally rather than have it handed over): `faceapp` stuck `Pending`, Argo CD `Degraded` → checked `karpenter.sh/discovery` tags on subnets/SG directly (fine) → `kubectl describe ec2nodeclass` showed every condition `True`/`Ready` (ruled out networking/IAM/AMI) → checked `g5.xlarge` AZ availability via `describe-instance-type-offerings` (available in all 3 AZs) → checked real spot price history directly rather than risk an on-demand launch just to test (confirmed active spot trading) → **root cause: AWS service quotas for "Running On-Demand G and VT instances" and "All G and VT Spot Instance Requests" both `0.0`** — the account was categorically blocked from launching any GPU instance, on-demand or spot, regardless of real capacity existing. Genuinely interesting layered-bug story: the *original* static `gpu` node group would have hit this identical wall, had the Terraform `ignore_changes` bug not masked it first — two independent bugs stacked, each hiding the next until the layer underneath got exercised for the first time.
+
+**Fix**: requested a quota increase (`aws service-quotas request-service-quota-increase`, `L-3819A6DF`, to 16 vCPUs — matches the `NodePool`'s own configured ceiling) — `PENDING` as of session end, not instant. Karpenter's provisioner retries automatically; no further action needed once approved.
+
+**Next:**
+- Wait for the quota approval, confirm a real GPU node actually provisions and `faceapp` goes `Healthy`.
+- Watch the first real Karpenter-provisioned node appear live — the actual payoff moment, not yet witnessed.
+- EFS/RWX for genuinely shared enrolled-face state across replicas (deferred).
+- `topologySpreadConstraints`/AZ-mismatch drill (Phase 2c), multi-cluster networking (2e), Datadog (2f) — all still open.
+- `make eks-down` when done — GPU quota being pending doesn't change the billing habit.

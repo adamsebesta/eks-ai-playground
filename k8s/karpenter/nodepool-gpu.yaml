@@ -1,0 +1,45 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu
+spec:
+  template:
+    metadata:
+      # Matches faceapp's existing nodeSelector — no change needed on the
+      # workload side to switch from a static node group to Karpenter.
+      labels:
+        workload: gpu-inference
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      # Same taint the static gpu node group applied — faceapp's existing
+      # toleration already matches this, unchanged.
+      taints:
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["g5.xlarge"]
+      # Periodic recycling — production pattern for rolling in security
+      # patches/AMI updates rather than nodes living forever.
+      expireAfter: 720h
+  limits:
+    # Hard ceiling on total provisioned capacity — a real safety net so a
+    # runaway HPA (or a bug) can't silently spin up unbounded GPU spend.
+    cpu: "16"
+    memory: 64Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+    budgets:
+      # Never disrupt more than 1 node at once — protects availability
+      # during consolidation/expiry, same reasoning as maxUnavailable on a
+      # Deployment rollout.
+      - nodes: "1"
