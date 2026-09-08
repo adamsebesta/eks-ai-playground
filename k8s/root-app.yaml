@@ -1,0 +1,27 @@
+# "App of apps" — the entire mechanism is that this Application's `path`
+# points at a directory containing MORE Application manifests. Argo CD
+# doesn't have a special "app of apps" feature flag; it's just applying
+# whatever's in the directory, and what's in the directory happens to be
+# more Applications, which then get reconciled independently themselves.
+#
+# Once this one object exists in the cluster, ollama/ollama-dev/faceapp
+# never need `kubectl apply` run against them again — this root app IS
+# the thing keeping them in sync with k8s/argocd-apps/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adamsebesta/eks-ai-playground.git
+    targetRevision: main
+    path: k8s/argocd-apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true

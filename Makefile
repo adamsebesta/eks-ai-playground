@@ -39,11 +39,10 @@ alb-controller:
 	helm repo update
 	helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 		-n kube-system \
+		-f helm-values/alb-controller/values.yaml \
 		--set clusterName=$(CLUSTER_NAME) \
 		--set region=$(AWS_REGION) \
 		--set vpcId=$$(cd terraform && terraform output -raw vpc_id) \
-		--set serviceAccount.create=true \
-		--set serviceAccount.name=aws-load-balancer-controller \
 		--set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$$(cd terraform && terraform output -raw lb_controller_role_arn)
 
 ollama-secret:
@@ -54,14 +53,11 @@ ollama-secret:
 storageclass:
 	kubectl apply -f k8s/storageclass-gp3.yaml
 
-# Fixed admin password so it survives cluster rebuilds: eks-playground-2026
-# (bcrypt hash below — not reversible; login isn't reachable without cluster
-# access already, so committing the hash to this public repo is low-risk)
 argocd:
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
 	helm install argocd argo/argo-cd -n argocd --create-namespace \
-		--set configs.secret.argocdServerAdminPassword='$$2a$$10$$QgWPMpv7VdrAv..Ffl6as.m3ozp4XR3Gi2muMqbwTljVGXBc67ZU2'
+		-f helm-values/argocd/values.yaml
 	kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=120s
 	kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s
 
@@ -70,10 +66,11 @@ ollama-secret-dev:
 	kubectl create secret generic ollama-secret -n inference-dev --from-literal=dummy-api-key=sk-test-12345 --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -f k8s/ollama-pvc-dev.yaml
 
+# One object — Argo CD takes it from here. Adding a 4th app later means
+# dropping a new file in k8s/argocd-apps/ and pushing, not touching this
+# Makefile or running kubectl by hand.
 argocd-apps: ollama-secret-dev
-	kubectl apply -f k8s/argocd-ollama-app.yaml
-	kubectl apply -f k8s/argocd-ollama-dev-app.yaml
-	kubectl apply -f k8s/argocd-faceapp-app.yaml
+	kubectl apply -f k8s/root-app.yaml
 
 argocd-password:
 	kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
@@ -83,21 +80,15 @@ argocd-ui:
 	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
 	kubectl port-forward -n argocd svc/argocd-server 8080:443
 
-# 2 replicas + leader election: Karpenter is cluster-critical infra, same HA
-# expectation as any other production controller. Namespace/service account
-# must match the Pod Identity Association Terraform created (karpenter/karpenter).
+# Namespace/service account must match the Pod Identity Association
+# Terraform created (karpenter/karpenter).
 karpenter:
 	helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
 		--version "1.14.1" \
 		-n karpenter --create-namespace \
+		-f helm-values/karpenter/values.yaml \
 		--set settings.clusterName=$(CLUSTER_NAME) \
-		--set settings.interruptionQueue=$$(cd terraform && terraform output -raw karpenter_queue_name) \
-		--set serviceAccount.name=karpenter \
-		--set replicas=2 \
-		--set controller.resources.requests.cpu=500m \
-		--set controller.resources.requests.memory=1Gi \
-		--set controller.resources.limits.cpu=1 \
-		--set controller.resources.limits.memory=1Gi
+		--set settings.interruptionQueue=$$(cd terraform && terraform output -raw karpenter_queue_name)
 	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
 	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
 

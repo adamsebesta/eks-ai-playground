@@ -1,0 +1,18 @@
+# Static config for Karpenter. settings.clusterName/interruptionQueue are
+# generated per-deploy (Makefile var / Terraform output) and layered on top
+# via --set at apply time — see Makefile.
+serviceAccount:
+  name: karpenter
+
+# 2 replicas + leader election: Karpenter is cluster-critical infra, same HA
+# expectation as any other production controller.
+replicas: 2
+
+controller:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi

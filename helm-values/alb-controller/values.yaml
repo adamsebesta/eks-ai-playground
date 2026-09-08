@@ -1,0 +1,6 @@
+# Static config for the AWS Load Balancer Controller.
+# vpcId, region, and the IRSA role ARN are generated per-deploy (Terraform
+# outputs) and layered on top via --set at apply time — see Makefile.
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller

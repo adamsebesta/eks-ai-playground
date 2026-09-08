@@ -1,0 +1,6 @@
+# Fixed admin password so it survives cluster rebuilds: eks-playground-2026
+# (bcrypt hash below — not reversible; login isn't reachable without cluster
+# access already, so committing the hash to this public repo is low-risk)
+configs:
+  secret:
+    argocdServerAdminPassword: "$2a$10$QgWPMpv7VdrAv..Ffl6as.m3ozp4XR3Gi2muMqbwTljVGXBc67ZU2"
