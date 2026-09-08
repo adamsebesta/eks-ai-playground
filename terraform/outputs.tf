@@ -33,3 +33,11 @@ output "karpenter_node_iam_role_name" {
 output "karpenter_queue_name" {
   value = module.karpenter.queue_name
 }
+
+output "chart_ollama_ecr_repository_url" {
+  value = aws_ecr_repository.chart_ollama.repository_url
+}
+
+output "chart_faceapp_ecr_repository_url" {
+  value = aws_ecr_repository.chart_faceapp.repository_url
+}

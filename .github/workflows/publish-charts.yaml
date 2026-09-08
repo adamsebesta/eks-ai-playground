@@ -1,0 +1,40 @@
+name: Package and push Helm charts to ECR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # OIDC — same role as the faceapp image build, no AWS keys stored
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::281981892670:role/eks-ai-playground-github-actions
+          aws-region: eu-central-1
+
+      - name: Login to ECR (OCI registry, for Helm)
+        run: |
+          aws ecr get-login-password --region eu-central-1 | \
+            helm registry login --username AWS --password-stdin 281981892670.dkr.ecr.eu-central-1.amazonaws.com
+
+      # Simplest correct approach: package + push both charts on any change
+      # under charts/** rather than diffing which one actually changed —
+      # ECR's IMMUTABLE-equivalent for OCI artifacts is per-tag, so pushing
+      # an unchanged chart at the same Chart.yaml version is a harmless no-op.
+      - name: Package and push charts
+        run: |
+          mkdir -p /tmp/charts
+          for chart in ollama faceapp; do
+            helm package "charts/$chart" -d /tmp/charts
+            helm push /tmp/charts/"$chart"-*.tgz oci://281981892670.dkr.ecr.eu-central-1.amazonaws.com/charts
+          done

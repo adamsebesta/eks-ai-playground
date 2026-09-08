@@ -159,6 +159,29 @@ resource "aws_ecr_repository" "faceapp" {
   }
 }
 
+# Centralized Helm chart hosting — same ECR account, OCI artifacts instead
+# of container images. Named "charts/<name>" so the resulting reference
+# reads naturally: oci://<registry>/charts/ollama:0.1.0. Deliberately
+# MUTABLE (unlike the image repo) — chart versions get bumped in Chart.yaml
+# per release, same convention as any public Helm chart repo.
+resource "aws_ecr_repository" "chart_ollama" {
+  name = "charts/ollama"
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+resource "aws_ecr_repository" "chart_faceapp" {
+  name = "charts/faceapp"
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
 # GitHub Actions OIDC — lets CI assume an AWS role without any long-lived
 # access keys stored as GitHub secrets. The thumbprint isn't hardcoded: the
 # module fetches GitHub's actual live TLS cert at apply time and computes
@@ -233,7 +256,13 @@ data "aws_iam_policy_document" "github_actions_ecr_push" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
     ]
-    resources = [aws_ecr_repository.faceapp.arn]
+    # OCI Helm charts use the same underlying ECR registry API as container
+    # images — same actions, just two more repository ARNs in scope.
+    resources = [
+      aws_ecr_repository.faceapp.arn,
+      aws_ecr_repository.chart_ollama.arn,
+      aws_ecr_repository.chart_faceapp.arn,
+    ]
   }
 }
 
