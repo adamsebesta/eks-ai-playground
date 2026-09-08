@@ -1,0 +1,9 @@
+# AKS — illustrative only, never deployed. Azure Application Gateway
+# Ingress Controller (AGIC) has its own annotation vocabulary again —
+# appgw.ingress.kubernetes.io/*, a third completely different namespace.
+ingress:
+  enabled: true
+  className: azure-application-gateway
+  host: faceapp.internal.example.com
+  annotations:
+    appgw.ingress.kubernetes.io/use-private-ip: "true"

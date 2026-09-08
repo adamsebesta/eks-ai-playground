@@ -13,6 +13,16 @@ image:
 service:
   port: 8000
 
+# Disabled by default — the chart stays cloud-agnostic; each cloud's
+# specifics (ingress controller, class, annotation vocabulary) live in a
+# values-<cloud>.yaml overlay instead of the template. See values-aws.yaml,
+# values-gcp.yaml, values-azure.yaml for what actually differs.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+
 resources:
   requests:
     cpu: "1"

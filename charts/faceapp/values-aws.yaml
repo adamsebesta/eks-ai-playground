@@ -1,0 +1,10 @@
+# EKS — what this repo actually runs. AWS Load Balancer Controller's
+# annotation vocabulary (alb.ingress.kubernetes.io/*) is meaningless to any
+# other cloud's ingress controller.
+ingress:
+  enabled: true
+  className: alb
+  host: faceapp.internal.example.com
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip

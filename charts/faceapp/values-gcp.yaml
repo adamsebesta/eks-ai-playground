@@ -1,0 +1,9 @@
+# GKE — illustrative only, never deployed (no GCP account in this repo).
+# GKE's built-in ingress controller uses a completely different annotation
+# vocabulary — cloud.google.com/*, not alb.ingress.kubernetes.io/*.
+ingress:
+  enabled: true
+  className: gce-internal # GKE's internal-LB ingress class
+  host: faceapp.internal.example.com
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}' # container-native load balancing
