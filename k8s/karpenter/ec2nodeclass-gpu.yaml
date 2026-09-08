@@ -10,7 +10,9 @@ spec:
   # so it always resolves to the current recommended build for this K8s version.
   amiSelectorTerms:
     - ssmParameter: "/aws/service/eks/optimized-ami/1.34/amazon-linux-2023/x86_64/nvidia/recommended/image_id"
-  role: __KARPENTER_NODE_ROLE_NAME__ # substituted at apply time — see `make karpenter-nodeclass`
+  # Pinned in terraform/main.tf (module.karpenter.node_iam_role_name) —
+  # static name, no substitution step needed.
+  role: eks-ai-playground-karpenter-node
   # Tag-based discovery — matches the karpenter.sh/discovery tags Terraform
   # applies to the private subnets and node security group.
   subnetSelectorTerms:

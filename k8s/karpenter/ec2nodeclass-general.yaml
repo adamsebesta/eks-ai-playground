@@ -12,7 +12,9 @@ spec:
   amiFamily: AL2023
   amiSelectorTerms:
     - alias: al2023@latest
-  role: __KARPENTER_NODE_ROLE_NAME__ # substituted at apply time
+  # Pinned in terraform/main.tf (module.karpenter.node_iam_role_name) —
+  # static name, no substitution step needed.
+  role: eks-ai-playground-karpenter-node
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: eks-ai-playground

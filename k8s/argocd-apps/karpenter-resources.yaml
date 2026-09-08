@@ -1,0 +1,22 @@
+# Plain-manifest source (not a Helm chart) — same pattern root itself uses
+# for k8s/argocd-apps/. Safe to GitOps-manage now that the node role name
+# is static (pinned in terraform/main.tf), not a per-deploy Terraform
+# output — no substitution step needed, no Atlantis/CI-tool coupling.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter-resources
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adamsebesta/eks-ai-playground.git
+    targetRevision: main
+    path: k8s/karpenter
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true

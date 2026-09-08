@@ -59,16 +59,23 @@ module "eks" {
   }
 
   eks_managed_node_groups = {
-    # Always-on system pool — CoreDNS, controllers, CPU inference experiments
+    # Always-on system pool — platform infra only (CoreDNS, Argo CD,
+    # Karpenter, ALB Controller, monitoring). App workloads now live on the
+    # Karpenter `general` pool instead (see k8s/karpenter/), so this stays
+    # small and static on purpose.
+    #
+    # NOTE: min_size alone can't fix a capacity crunch here — EKS's
+    # UpdateNodegroupConfig API requires desired >= min in the SAME call,
+    # and desired_size is permanently ignore_changes'd by this module
+    # (confirmed twice: this pool and the earlier GPU scale-up attempt).
+    # If more headroom is ever needed, bump instance_types instead —
+    # that field isn't ignored — or do a one-time manual
+    # `aws eks update-nodegroup-config` outside Terraform.
     system = {
       instance_types = ["t3.medium"]
-      # min_size bumped 2->3 (not desired_size — that field is permanently
-      # ignore_changes'd by the module, see the karpenter comment below).
-      # Raising min_size forces AWS's own ASG invariant (desired >= min) to
-      # scale up automatically, sidestepping that exact wall.
-      min_size     = 3
-      max_size     = 3
-      desired_size = 2
+      min_size       = 2
+      max_size       = 3
+      desired_size   = 2
     }
 
     # GPU pool — spot g5.xlarge, scaled to 0 by default (make gpu-up / gpu-down)
@@ -293,6 +300,14 @@ module "karpenter" {
   create_pod_identity_association = true
 
   enable_spot_termination = true # real spot interruption handling, Week 8's story
+
+  # Pinned explicitly (same convention as lb_controller_irsa_role's
+  # role_name) instead of letting the module auto-generate a random-suffix
+  # name. That was the actual root problem — a static, predictable name
+  # means EC2NodeClass can reference it directly as committed YAML, no
+  # terraform output/sed step needed, and no CI-tool-coupling issue under
+  # Atlantis or any other Terraform runner.
+  node_iam_role_name = "${var.cluster_name}-karpenter-node"
 
   namespace       = "karpenter"
   service_account = "karpenter"

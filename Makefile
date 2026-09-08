@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui karpenter-nodeclass gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -74,18 +74,12 @@ argocd-ui:
 	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
 	kubectl port-forward -n argocd svc/argocd-server 8080:443
 
-# karpenter now installed via Terraform's helm_release (main.tf), same
-# reasoning as alb-controller above. `make eks-up` handles it.
-
-karpenter-nodeclass:
-	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
-	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
-	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
-		k8s/karpenter/ec2nodeclass-gpu.yaml | kubectl apply -f -
-	kubectl apply -f k8s/karpenter/nodepool-gpu.yaml
-	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
-		k8s/karpenter/ec2nodeclass-general.yaml | kubectl apply -f -
-	kubectl apply -f k8s/karpenter/nodepool-general.yaml
+# karpenter (the controller) now installed via Terraform's helm_release
+# (main.tf), same reasoning as alb-controller above. `make eks-up` handles
+# it. The NodePool/EC2NodeClass objects are now Argo CD-managed too
+# (k8s/argocd-apps/karpenter-resources.yaml) — the node role name became
+# static (pinned in main.tf) so no terraform output/sed step is needed
+# anymore, and nothing here couples to how/where `terraform apply` runs.
 
 # monitoring now an Argo CD Application (k8s/argocd-apps/monitoring.yaml) —
 # zero Terraform-dependent values, a clean fit unlike alb-controller/karpenter.
@@ -100,7 +94,7 @@ grafana-ui:
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
-bootstrap: kubeconfig storageclass ollama-secret argocd karpenter-nodeclass argocd-apps
+bootstrap: kubeconfig storageclass ollama-secret argocd argocd-apps
 
 gpu-up:
 	cd terraform && terraform apply -var gpu_desired_size=1
