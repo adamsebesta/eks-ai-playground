@@ -26,3 +26,9 @@ spec:
       prune: true
     syncOptions:
       - CreateNamespace=true
+      # kube-prometheus-stack's CRDs are large enough that Argo CD's default
+      # client-side apply (which stores the prior config in a
+      # last-applied-configuration annotation) exceeds Kubernetes' 256KiB
+      # annotation limit. Server-side apply doesn't use that annotation at
+      # all — a known, documented issue with this specific chart's CRDs.
+      - ServerSideApply=true
