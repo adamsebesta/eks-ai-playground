@@ -62,9 +62,13 @@ module "eks" {
     # Always-on system pool — CoreDNS, controllers, CPU inference experiments
     system = {
       instance_types = ["t3.medium"]
-      min_size       = 2
-      max_size       = 3
-      desired_size   = 2
+      # min_size bumped 2->3 (not desired_size — that field is permanently
+      # ignore_changes'd by the module, see the karpenter comment below).
+      # Raising min_size forces AWS's own ASG invariant (desired >= min) to
+      # scale up automatically, sidestepping that exact wall.
+      min_size     = 3
+      max_size     = 3
+      desired_size = 2
     }
 
     # GPU pool — spot g5.xlarge, scaled to 0 by default (make gpu-up / gpu-down)

@@ -16,6 +16,10 @@ spec:
       labels:
         {{- include "ollama.labels" . | nindent 8 }}
     spec:
+      # Pins to the Karpenter general-purpose pool, not the static `system`
+      # pool — keeps app workloads off the platform-infra-only capacity.
+      nodeSelector:
+        workload: general
       initContainers:
         - name: pull-model
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

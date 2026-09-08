@@ -83,6 +83,9 @@ karpenter-nodeclass:
 	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
 		k8s/karpenter/ec2nodeclass-gpu.yaml | kubectl apply -f -
 	kubectl apply -f k8s/karpenter/nodepool-gpu.yaml
+	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
+		k8s/karpenter/ec2nodeclass-general.yaml | kubectl apply -f -
+	kubectl apply -f k8s/karpenter/nodepool-general.yaml
 
 # monitoring now an Argo CD Application (k8s/argocd-apps/monitoring.yaml) —
 # zero Terraform-dependent values, a clean fit unlike alb-controller/karpenter.
