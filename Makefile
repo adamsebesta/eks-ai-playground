@@ -73,6 +73,7 @@ ollama-secret-dev:
 argocd-apps: ollama-secret-dev
 	kubectl apply -f k8s/argocd-ollama-app.yaml
 	kubectl apply -f k8s/argocd-ollama-dev-app.yaml
+	kubectl apply -f k8s/argocd-faceapp-app.yaml
 
 argocd-password:
 	kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
@@ -121,7 +122,7 @@ grafana-ui:
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
-bootstrap: kubeconfig alb-controller storageclass ollama-secret argocd argocd-apps
+bootstrap: kubeconfig alb-controller storageclass ollama-secret argocd karpenter karpenter-nodeclass argocd-apps
 
 gpu-up:
 	cd terraform && terraform apply -var gpu_desired_size=1

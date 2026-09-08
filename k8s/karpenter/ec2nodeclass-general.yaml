@@ -1,0 +1,18 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: general
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: __KARPENTER_NODE_ROLE_NAME__ # substituted at apply time
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: eks-ai-playground
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: eks-ai-playground
+  tags:
+    Project: eks-ai-playground
+    Owner: adam
