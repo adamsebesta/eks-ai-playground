@@ -1,0 +1,28 @@
+# Zero Terraform-computed values — a real, no-workarounds candidate for
+# Argo CD, unlike alb-controller/karpenter (see terraform/main.tf comment).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: "90.0.0"
+    helm:
+      # Argo CD defaults the release name to the Application's own name
+      # ("monitoring") — pinned explicitly so the Grafana secret/service
+      # names stay "kube-prometheus-stack-*", matching the existing
+      # grafana-password/grafana-ui Makefile targets unchanged.
+      releaseName: kube-prometheus-stack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true

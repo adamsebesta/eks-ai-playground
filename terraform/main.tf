@@ -14,7 +14,7 @@ module "vpc" {
   single_nat_gateway = true # cost over HA — this is a playground
 
   # Required for the AWS Load Balancer Controller (Week 4)
-  public_subnet_tags  = { "kubernetes.io/role/elb" = 1 }
+  public_subnet_tags = { "kubernetes.io/role/elb" = 1 }
   # karpenter.sh/discovery: tag-based lookup, not hardcoded subnet IDs — the
   # standard production pattern. EC2NodeClass finds these declaratively.
   private_subnet_tags = {
@@ -256,8 +256,8 @@ module "karpenter" {
 
   # Pod Identity, not IRSA — closes the loop on the eks-pod-identity-agent
   # addon that's been installed since Day 1 but never actually used yet.
-  enable_pod_identity              = true
-  create_pod_identity_association  = true
+  enable_pod_identity             = true
+  create_pod_identity_association = true
 
   enable_spot_termination = true # real spot interruption handling, Week 8's story
 
@@ -268,4 +268,46 @@ module "karpenter" {
     Project = "eks-ai-playground"
     Owner   = "adam"
   }
+}
+
+# Moved from an imperative `make alb-controller`/`make karpenter` Helm call
+# to Terraform's own helm_release — these two need real Terraform-computed
+# values (VPC ID, IRSA role ARN, the auto-generated queue name), which a
+# declarative Argo CD Application has no way to fetch at sync time. Static
+# config lives in helm-values/; only genuinely per-deploy values are set here.
+resource "helm_release" "alb_controller" {
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  namespace        = "kube-system"
+  create_namespace = true
+
+  values = [file("${path.module}/../helm-values/alb-controller/values.yaml")]
+
+  set = [
+    { name = "clusterName", value = module.eks.cluster_name },
+    { name = "region", value = var.aws_region },
+    { name = "vpcId", value = module.vpc.vpc_id },
+    { name = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn", value = module.lb_controller_irsa_role.iam_role_arn },
+  ]
+
+  depends_on = [module.eks]
+}
+
+resource "helm_release" "karpenter" {
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  version          = "1.14.1"
+  namespace        = "karpenter"
+  create_namespace = true
+
+  values = [file("${path.module}/../helm-values/karpenter/values.yaml")]
+
+  set = [
+    { name = "settings.clusterName", value = module.eks.cluster_name },
+    { name = "settings.interruptionQueue", value = module.karpenter.queue_name },
+  ]
+
+  depends_on = [module.karpenter]
 }

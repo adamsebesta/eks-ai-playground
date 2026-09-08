@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig alb-controller ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui monitoring grafana-password grafana-ui karpenter karpenter-nodeclass gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui karpenter-nodeclass gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -34,16 +34,10 @@ eks-down:
 kubeconfig:
 	aws eks update-kubeconfig --name $(CLUSTER_NAME) --region $(AWS_REGION)
 
-alb-controller:
-	helm repo add eks https://aws.github.io/eks-charts
-	helm repo update
-	helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-		-n kube-system \
-		-f helm-values/alb-controller/values.yaml \
-		--set clusterName=$(CLUSTER_NAME) \
-		--set region=$(AWS_REGION) \
-		--set vpcId=$$(cd terraform && terraform output -raw vpc_id) \
-		--set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$$(cd terraform && terraform output -raw lb_controller_role_arn)
+# alb-controller now installed via Terraform's helm_release (main.tf) —
+# needs real Terraform-computed values (VPC ID, IRSA ARN), which a Makefile
+# target or Argo CD Application has no clean way to fetch. `make eks-up`
+# handles it now.
 
 ollama-secret:
 	kubectl create namespace inference --dry-run=client -o yaml | kubectl apply -f -
@@ -80,28 +74,18 @@ argocd-ui:
 	@echo "Login at https://localhost:8080 — user: admin, password: run 'make argocd-password'"
 	kubectl port-forward -n argocd svc/argocd-server 8080:443
 
-# Namespace/service account must match the Pod Identity Association
-# Terraform created (karpenter/karpenter).
-karpenter:
-	helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
-		--version "1.14.1" \
-		-n karpenter --create-namespace \
-		-f helm-values/karpenter/values.yaml \
-		--set settings.clusterName=$(CLUSTER_NAME) \
-		--set settings.interruptionQueue=$$(cd terraform && terraform output -raw karpenter_queue_name)
-	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
-	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
+# karpenter now installed via Terraform's helm_release (main.tf), same
+# reasoning as alb-controller above. `make eks-up` handles it.
 
 karpenter-nodeclass:
+	kubectl wait --for=condition=Established crd/nodepools.karpenter.sh --timeout=120s
+	kubectl wait --for=condition=Established crd/ec2nodeclasses.karpenter.k8s.aws --timeout=120s
 	sed 's|__KARPENTER_NODE_ROLE_NAME__|'"$$(cd terraform && terraform output -raw karpenter_node_iam_role_name)"'|' \
 		k8s/karpenter/ec2nodeclass-gpu.yaml | kubectl apply -f -
 	kubectl apply -f k8s/karpenter/nodepool-gpu.yaml
 
-monitoring:
-	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-	helm repo update
-	helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-		-n monitoring --create-namespace
+# monitoring now an Argo CD Application (k8s/argocd-apps/monitoring.yaml) —
+# zero Terraform-dependent values, a clean fit unlike alb-controller/karpenter.
 
 grafana-password:
 	kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d
@@ -113,7 +97,7 @@ grafana-ui:
 
 # Everything a fresh `make eks-up` needs afterward to be usable again —
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
-bootstrap: kubeconfig alb-controller storageclass ollama-secret argocd karpenter karpenter-nodeclass argocd-apps
+bootstrap: kubeconfig storageclass ollama-secret argocd karpenter-nodeclass argocd-apps
 
 gpu-up:
 	cd terraform && terraform apply -var gpu_desired_size=1
