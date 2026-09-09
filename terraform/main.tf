@@ -307,7 +307,13 @@ module "karpenter" {
   # means EC2NodeClass can reference it directly as committed YAML, no
   # terraform output/sed step needed, and no CI-tool-coupling issue under
   # Atlantis or any other Terraform runner.
-  node_iam_role_name = "${var.cluster_name}-karpenter-node"
+  # use_name_prefix defaults to true in this module — without setting it
+  # false, node_iam_role_name is treated as a PREFIX and AWS still appends
+  # random characters for uniqueness, exactly the problem this was meant
+  # to eliminate. Confirmed by the actual apply output still showing a
+  # random suffix despite this being set.
+  node_iam_role_name            = "${var.cluster_name}-karpenter-node"
+  node_iam_role_use_name_prefix = false
 
   namespace       = "karpenter"
   service_account = "karpenter"
