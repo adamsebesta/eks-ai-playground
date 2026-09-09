@@ -13,6 +13,11 @@ image:
 service:
   port: 8000
 
+# Matches aws_s3_bucket.faceapp_snapshots' name in terraform/main.tf —
+# the app code doesn't use this yet (no S3 client in main.py), only the
+# IAM/Pod Identity wiring is built so far. Flagged, not silently claimed done.
+snapshotsBucket: eks-ai-playground-faceapp-snapshots
+
 # Disabled by default — the chart stays cloud-agnostic; each cloud's
 # specifics (ingress controller, class, annotation vocabulary) live in a
 # values-<cloud>.yaml overlay instead of the template. See values-aws.yaml,

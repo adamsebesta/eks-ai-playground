@@ -365,3 +365,75 @@ resource "helm_release" "karpenter" {
 
   depends_on = [module.karpenter]
 }
+
+# --- faceapp's own Pod Identity role — first app-level (not
+# infra-controller-level) AWS permission in this repo. Storage for
+# detected-face snapshots, ties directly to the actual product concept
+# (parent notification needs the matched frame, not just a log line).
+
+resource "aws_s3_bucket" "faceapp_snapshots" {
+  bucket = "${var.cluster_name}-faceapp-snapshots"
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+# EKS Pod Identity's trust policy — simpler than IRSA's OIDC federation:
+# just trusts the pods.eks.amazonaws.com service principal directly. Which
+# ServiceAccount can actually assume this comes from the *association*
+# below, not from anything in this trust policy itself.
+data "aws_iam_policy_document" "eks_pod_identity_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "faceapp" {
+  name               = "${var.cluster_name}-faceapp"
+  assume_role_policy = data.aws_iam_policy_document.eks_pod_identity_assume.json
+
+  tags = {
+    Project = "eks-ai-playground"
+    Owner   = "adam"
+  }
+}
+
+# Scoped to exactly this one bucket — the actual "narrow, per-app
+# permission" ollama/faceapp never had before this, same precision an ECS
+# task role would give an application.
+data "aws_iam_policy_document" "faceapp_s3" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["${aws_s3_bucket.faceapp_snapshots.arn}/*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.faceapp_snapshots.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "faceapp_s3" {
+  name   = "s3-snapshots"
+  role   = aws_iam_role.faceapp.id
+  policy = data.aws_iam_policy_document.faceapp_s3.json
+}
+
+# The actual binding: only pods using the "faceapp" ServiceAccount in the
+# "faceapp" namespace can assume this role — nothing else on the cluster,
+# including other pods on the same node, gets these S3 permissions.
+resource "aws_eks_pod_identity_association" "faceapp" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "faceapp"
+  service_account = "faceapp"
+  role_arn        = aws_iam_role.faceapp.arn
+}

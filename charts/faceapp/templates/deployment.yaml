@@ -16,6 +16,10 @@ spec:
       labels:
         {{- include "faceapp.labels" . | nindent 8 }}
     spec:
+      # Must match the aws_eks_pod_identity_association Terraform created —
+      # that pairing (this SA, this namespace) is what actually grants the
+      # S3 permissions, not anything visible in this pod spec itself.
+      serviceAccountName: faceapp
       # Only nodes in the gpu node group carry this label — pins scheduling
       # there deliberately, same pairing as the taint/toleration below.
       nodeSelector:
@@ -34,6 +38,9 @@ spec:
             - containerPort: 8000
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: SNAPSHOTS_BUCKET
+              value: {{ .Values.snapshotsBucket | quote }}
           volumeMounts:
             - name: data
               mountPath: /data
