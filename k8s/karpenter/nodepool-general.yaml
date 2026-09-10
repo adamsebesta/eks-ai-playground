@@ -18,7 +18,12 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["spot"]
-        - key: node.kubernetes.io/instance-category
+        # AWS/Karpenter-specific — NOT under node.kubernetes.io/. That was
+        # the actual bug: a label key that doesn't exist can never match
+        # any instance type, so every scheduling attempt failed
+        # deterministically (confirmed via `kubectl describe nodepool
+        # general` — 324 identical failures, not a transient capacity issue).
+        - key: karpenter.k8s.aws/instance-category
           operator: In
           values: ["t", "m"]
       expireAfter: 720h
