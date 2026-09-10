@@ -36,18 +36,37 @@ docs/
   GPU_SCHEDULING.md   # device plugin vs. DRA
   JOURNAL.md          # weekly log; encourage him to fill it
 local/                # kind cluster + Ollama CPU inference (free)
-terraform/            # VPC + EKS, CPU node group + GPU node group
-k8s/gpu/              # NVIDIA device plugin (classic path)
-k8s/vllm/             # vLLM via nvidia.com/gpu integer resource
-k8s/dra/              # same workload via Dynamic Resource Allocation
+app/faceapp/          # the real project: InsightFace GPU service (Phase 4 pivot)
+terraform/            # VPC, EKS, system node group (static), IRSA/Pod Identity
+                       # roles, ECR, Karpenter controller — split by concern into
+                       # main.tf/iam-controllers.tf/karpenter.tf/ecr.tf/
+                       # github-actions.tf/pod-identity.tf. No GPU node group —
+                       # Karpenter provisions GPU/general capacity dynamically.
+helm-values/          # static Helm config for Terraform-managed controllers
+                       # (alb-controller, argocd, karpenter) — per-deploy values
+                       # (ARNs, VPC ID) stay as Terraform `set` overrides, not here.
+charts/                # ollama, faceapp — authored Helm charts, Argo CD-managed
+k8s/argocd-apps/        # every Argo CD Application (root's own watch path) —
+                        # ollama, ollama-dev, faceapp, monitoring, fluent-bit,
+                        # karpenter-resources
+k8s/karpenter/          # NodePool/EC2NodeClass (gpu, general) — Argo CD-managed,
+                        # NOT Terraform (see karpenter-resources.yaml above)
+k8s/root-app.yaml       # the app-of-apps root — watches k8s/argocd-apps/
+k8s/gpu/              # NVIDIA device plugin (node-level requirement regardless
+                      # of static vs. Karpenter-provisioned GPU nodes)
+k8s/vllm/             # vLLM via nvidia.com/gpu integer resource — reference/
+                      # comparison material only, faceapp is the active GPU workload
+k8s/dra/              # same workload via Dynamic Resource Allocation — needs a
+                      # static GPU node group reintroduced when reached (DRA and
+                      # Karpenter are mutually exclusive, see Hard constraints)
 Makefile              # every workflow is one target
 ```
 
 ## Hard constraints — do not violate
 
-**Cost.** GPU nodes are ~$0.30–0.45/hr spot; the EKS control plane is ~$73/mo. The GPU node group **defaults to 0 nodes** and that default must stay. Always remind him to `make gpu-down` after a session and `make eks-down` between practice weeks. Never suggest raising `gpu_desired_size` in the committed default.
+**Cost.** GPU nodes are ~$0.30–0.45/hr spot; the EKS control plane is ~$73/mo. GPU capacity is **Karpenter-managed** (`k8s/karpenter/nodepool-gpu.yaml`), not a static node group — there's no `gpu_desired_size` variable or `make gpu-up`/`gpu-down` toggle anymore (removed once the static group was found to be dead weight after the Karpenter pivot). Cost control now comes from the `NodePool`'s `limits` ceiling plus `consolidationPolicy: WhenEmptyOrUnderutilized` auto-scaling to zero when nothing needs GPU capacity — genuinely automatic, not a manual step to remind him about. Still always remind him to `make eks-down` between practice weeks.
 
-**DRA and Karpenter are mutually exclusive.** DRA does not work with Karpenter or EKS Auto Mode — managed node groups only. Week 8 (Karpenter + device plugin) and Week 8b (DRA) are deliberately separate exercises. Don't try to combine them.
+**DRA and Karpenter are mutually exclusive.** DRA does not work with Karpenter or EKS Auto Mode — managed node groups only. Week 8 (Karpenter + device plugin) and Week 8b (DRA) are deliberately separate exercises. Don't try to combine them. **Real consequence of the above**: since the static GPU node group was removed entirely (Karpenter now handles all GPU provisioning), Week 8b's DRA exercise will need a static GPU node group reintroduced — or the Karpenter `gpu` NodePool temporarily disabled — specifically for that exercise when he gets there. Not currently possible with the committed Terraform as-is.
 
 **Kubernetes 1.34+ is required** for DRA (it went GA there; the API moved `resource.k8s.io/v1beta1` → `v1`). Terraform defaults to 1.34. Manifests written against older tutorials will not apply cleanly.
 
