@@ -37,13 +37,9 @@ make local-down
 
 ```bash
 # Prereqs: aws cli authenticated, terraform >= 1.9, kubectl, helm
-make eks-up            # ~15 min: VPC + EKS + CPU node group (GPU pool at 0)
-make kubeconfig
-make gpu-up            # scale GPU node group to 1 (g5.xlarge spot)
-make gpu-plugin        # NVIDIA device plugin
-make vllm              # deploy vLLM + Qwen2.5-1.5B-Instruct
-make vllm-chat         # port-forward and send a test completion
-make gpu-down          # ALWAYS after a session (GPU $ off)
+make eks-up            # ~15 min: VPC + EKS + CPU node group; GPU capacity is Karpenter-managed, provisioned on demand
+make bootstrap         # everything non-Terraform-managed: Argo CD, apps, Karpenter NodePools
+make gpu-plugin        # NVIDIA device plugin — required on any GPU node regardless of how it was provisioned
 make eks-down          # destroy everything
 ```
 

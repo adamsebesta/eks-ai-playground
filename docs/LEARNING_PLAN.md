@@ -88,8 +88,7 @@
 
 **Architecture**: an InsightFace-based detection+recognition API (GPU-backed, same Deployment/Service/PVC shape as Ollama), a frame-source component simulating a camera feed from stock footage, and a notification-simulation layer (log/webhook) standing in for a real parent-alert system. Packaged identically to everything built so far — Helm chart, Argo CD Application, GPU taints/tolerations, DCGM-based observability.
 
-**Week 7 — classic path (device plugin)**
-- Scale up the GPU node group (`make gpu-up`): g5.xlarge spot (~$0.30–0.45/hr — always `make gpu-down` after sessions). Note: InsightFace needs nowhere near 24GB VRAM — running on GPU is for the scheduling-model exercise, not because the workload demands it.
+**Week 7 — classic path (device plugin)** — note: superseded by the Karpenter pivot (Week 2, real session) before this was reached as originally planned. GPU capacity is now Karpenter-managed (`k8s/karpenter/nodepool-gpu.yaml`), provisioned automatically on real pod demand rather than a manual `make gpu-up`/`gpu-down` toggle. g5.xlarge spot, ~$0.30–0.45/hr while a node is actually up. Note: InsightFace needs nowhere near 24GB VRAM — running on GPU is for the scheduling-model exercise, not because the workload demands it.
 - NVIDIA device plugin DaemonSet, GPU taints/tolerations, `nvidia.com/gpu` resource scheduling.
 - Containerize the InsightFace service, deploy it (replaces the vLLM/Qwen2.5-1.5B step — `k8s/vllm/` stays in the repo as reference/comparison material, not the active path).
 - Benchmark it: inference latency per frame, throughput, concurrency behavior. Record numbers in the README.

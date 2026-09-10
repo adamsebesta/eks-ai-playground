@@ -78,27 +78,12 @@ module "eks" {
       desired_size   = 2
     }
 
-    # GPU pool — spot g5.xlarge, scaled to 0 by default (make gpu-up / gpu-down)
-    gpu = {
-      ami_type       = "AL2023_x86_64_NVIDIA"
-      instance_types = var.gpu_instance_types
-      capacity_type  = "SPOT"
-      min_size       = 0
-      max_size       = 2
-      desired_size   = var.gpu_desired_size
-
-      labels = {
-        workload = "gpu-inference"
-      }
-
-      taints = {
-        gpu = {
-          key    = "nvidia.com/gpu"
-          value  = "true"
-          effect = "NO_SCHEDULE"
-        }
-      }
-    }
+    # No static gpu group anymore — fully replaced by the Karpenter-managed
+    # `gpu` NodePool (k8s/karpenter/nodepool-gpu.yaml). This was the
+    # original Week 7 "classic path" group, built before the ignore_changes
+    # bug forced a pivot to Karpenter mid-session; it sat unused at
+    # desired_size 0 ever since. Removed rather than left as confusing dead
+    # weight — faceapp has used the Karpenter version exclusively all along.
   }
 
   tags = {

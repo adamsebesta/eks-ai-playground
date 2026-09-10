@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui gpu-up gpu-down gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -96,11 +96,9 @@ grafana-ui:
 # none of this is Terraform-managed, so it doesn't survive a teardown/rebuild.
 bootstrap: kubeconfig storageclass ollama-secret argocd argocd-apps
 
-gpu-up:
-	cd terraform && terraform apply -var gpu_desired_size=1
-
-gpu-down:
-	cd terraform && terraform apply -var gpu_desired_size=0
+# gpu-up/gpu-down removed — Karpenter provisions/deprovisions GPU capacity
+# automatically based on real pod demand (k8s/karpenter/nodepool-gpu.yaml),
+# replacing the old static-node-group manual toggle entirely.
 
 gpu-plugin:
 	kubectl apply -f k8s/gpu/nvidia-device-plugin.yaml

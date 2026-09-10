@@ -22,14 +22,7 @@ variable "vpc_cidr" {
   default     = "10.42.0.0/16"
 }
 
-variable "gpu_instance_types" {
-  description = "GPU instance types for the inference node group (g5.xlarge = 1x A10G 24GB)"
-  type        = list(string)
-  default     = ["g5.xlarge"]
-}
-
-variable "gpu_desired_size" {
-  description = "GPU nodes. Keep at 0 when not practicing — this is the cost lever (make gpu-up / gpu-down)."
-  type        = number
-  default     = 0
-}
+# GPU instance type (g5.xlarge = 1x A10G 24GB) now lives in
+# k8s/karpenter/nodepool-gpu.yaml — Karpenter provisions/deprovisions GPU
+# capacity automatically based on real pod demand, replacing the old
+# gpu_desired_size manual toggle (make gpu-up/gpu-down) entirely.
