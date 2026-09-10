@@ -50,7 +50,7 @@ storageclass:
 argocd:
 	helm repo add argo https://argoproj.github.io/argo-helm
 	helm repo update
-	helm install argocd argo/argo-cd -n argocd --create-namespace \
+	helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace \
 		-f helm-values/argocd/values.yaml
 	kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=120s
 	kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s
