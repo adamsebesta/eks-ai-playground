@@ -1,4 +1,4 @@
-.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui gpu-plugin vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
+.PHONY: local-up local-down local-inference local-chat eks-up eks-down kubeconfig ollama-secret ollama-secret-dev storageclass bootstrap argocd argocd-apps argocd-password argocd-ui grafana-password grafana-ui vllm vllm-chat dra-driver dra-inspect dra-vllm dra-claims dra-down fmt validate
 
 CLUSTER_NAME ?= eks-ai-playground
 AWS_REGION   ?= eu-central-1
@@ -100,8 +100,10 @@ bootstrap: kubeconfig storageclass ollama-secret argocd argocd-apps
 # automatically based on real pod demand (k8s/karpenter/nodepool-gpu.yaml),
 # replacing the old static-node-group manual toggle entirely.
 
-gpu-plugin:
-	kubectl apply -f k8s/gpu/nvidia-device-plugin.yaml
+# gpu-plugin target removed — now an Argo CD Application
+# (k8s/argocd-apps/gpu-device-plugin.yaml), same reasoning as
+# karpenter-resources: a manual step is easy to forget on a fresh GPU node,
+# which is exactly what caused faceapp's Insufficient nvidia.com/gpu.
 
 vllm:
 	kubectl apply -f k8s/vllm/namespace.yaml

@@ -1,0 +1,24 @@
+# Plain-manifest source, same pattern as karpenter-resources.yaml. Was a
+# manual `make gpu-plugin` step before — easy to forget on a fresh GPU
+# node/cluster (exactly what happened: faceapp sat on Insufficient
+# nvidia.com/gpu until this was applied by hand). GitOps-managed now: any
+# future GPU node Karpenter provisions gets picked up by this DaemonSet
+# automatically, no manual step required.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-device-plugin
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adamsebesta/eks-ai-playground.git
+    targetRevision: main
+    path: k8s/gpu
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true

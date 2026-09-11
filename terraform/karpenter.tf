@@ -39,6 +39,20 @@ module "karpenter" {
   }
 }
 
+# Account-level, one-time bootstrap — NOT a Karpenter controller permission.
+# AWS auto-creates this the first time any principal in the account requests
+# a Spot instance, using that principal's own credentials to do so. Since
+# this account had never used Spot before, Karpenter's CreateFleet call
+# failed with AuthFailure.ServiceLinkedRoleCreationNotPermitted (the
+# controller's IAM policy only grants it ec2:* on spot-instances-request
+# ARNs, not iam:CreateServiceLinkedRole — reasonable, since this role only
+# ever needs to exist once per account, not be re-grantable by every spot
+# consumer). Declaring it here means it's tracked, instead of a one-off
+# `aws iam create-service-linked-role` run by hand.
+resource "aws_iam_service_linked_role" "spot" {
+  aws_service_name = "spot.amazonaws.com"
+}
+
 resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"

@@ -38,8 +38,7 @@ make local-down
 ```bash
 # Prereqs: aws cli authenticated, terraform >= 1.9, kubectl, helm
 make eks-up            # ~15 min: VPC + EKS + CPU node group; GPU capacity is Karpenter-managed, provisioned on demand
-make bootstrap         # everything non-Terraform-managed: Argo CD, apps, Karpenter NodePools
-make gpu-plugin        # NVIDIA device plugin — required on any GPU node regardless of how it was provisioned
+make bootstrap         # everything non-Terraform-managed: Argo CD, apps, Karpenter NodePools, NVIDIA device plugin
 make eks-down          # destroy everything
 ```
 
